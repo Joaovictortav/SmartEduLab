@@ -1,0 +1,60 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v6.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v6.0": {
+      "BackBolinha/1.0.0": {
+        "dependencies": {
+          "MQTTnet": "4.3.1.873",
+          "MQTTnet.AspNetCore": "4.3.1.873"
+        },
+        "runtime": {
+          "BackBolinha.dll": {}
+        }
+      },
+      "MQTTnet/4.3.1.873": {
+        "runtime": {
+          "lib/net6.0/MQTTnet.dll": {
+            "assemblyVersion": "4.3.1.873",
+            "fileVersion": "4.3.1.873"
+          }
+        }
+      },
+      "MQTTnet.AspNetCore/4.3.1.873": {
+        "dependencies": {
+          "MQTTnet": "4.3.1.873"
+        },
+        "runtime": {
+          "lib/net6.0/MQTTnet.AspNetCore.dll": {
+            "assemblyVersion": "4.3.1.873",
+            "fileVersion": "4.3.1.873"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "BackBolinha/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "MQTTnet/4.3.1.873": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-5Btmzjv9TWQewlHL6QPB3/deTxAfHf0cR1ixehH/4311oKUpiYrgt1uQZFTbyBWjR7zVKv1U3+s4o3IPm/++Ww==",
+      "path": "mqttnet/4.3.1.873",
+      "hashPath": "mqttnet.4.3.1.873.nupkg.sha512"
+    },
+    "MQTTnet.AspNetCore/4.3.1.873": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-alFZM2hNLEH5jy752ANyIKz/WqEMS9mSE/JosgX2ZIIOPGUfttb62CkP3Mq6baOgg66JS+aqK8mjagWXh3QfiA==",
+      "path": "mqttnet.aspnetcore/4.3.1.873",
+      "hashPath": "mqttnet.aspnetcore.4.3.1.873.nupkg.sha512"
+    }
+  }
+}

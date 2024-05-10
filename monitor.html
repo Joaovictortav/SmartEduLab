@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>IHM-IoT</title>
+    <style>
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Impede a barra de rolagem */
+            background-color: rgb(35, 27, 46);
+        }
+
+        .custom-button {
+            padding: 10px;
+            font-size: 14px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            margin-left: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        } 
+
+        .custom-stop-button {
+            padding: 10px;
+            font-size: 14px;
+            background-color: #ff0000;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .custom-button-start {
+            padding: 10px;
+            font-size: 14px;
+            background-color: #30d72a;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: space-around;
+            margin: 15px;
+        }
+
+        .error-message {
+            padding: 10px;
+            color: #ff7700;
+            font-size: 14px;
+            margin-top: 5px;
+            display: flex; /* Inicialmente escondida */
+            justify-content: center;
+            text-align: center;
+            width: auto;
+            height: 10px;
+        }
+
+        .center-div {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 80%;
+            height: 40%;
+        }
+
+        .labels {
+            color:#fff;
+        }
+
+        .inputboxes {
+            background-color: rgb(68, 56, 84);
+            font-size: 14;
+            color: #fff;
+            text-align: center;
+            padding: 8px;
+        }
+
+    </style>    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.2/mqttws31.min.js" type="text/javascript"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script type="text/javascript" id="MathJax-script" async
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
+    </script>
+</head>
+<body>
+    <div class="toolbar">
+        <div id="constantes" style="display:none">
+            <span class="labels" id="constlabel">Constantes atuais: Kp = - ki = - kd = - </span> <br>
+            <input class="inputboxes" type="number" id="kpin" placeholder="kp" step="0.01" min="-50" max="50">
+            <input class="inputboxes" type="number" id="kiin" placeholder="ki" step="0.01" min="-50" max="50">
+            <input class="inputboxes" type="number" id="kdin" placeholder="kd" step="0.01" min="-50" max="50">
+            <input class="custom-button" type="submit" id="botatt" value="Atualizar">
+        </div>
+
+        <div>
+            <select class="inputboxes" id="loop-type" style="display:none">
+                <option value = "X">Modo de Operação</option>
+                <option value = "A">Modelagem</option>
+                <!-- <option value = "B">Controlador Sugerido</option> -->
+                <option value = "C">Controlador PID</option>
+            </select>
+        </div>
+
+        <div id="zoom" style="display: none">
+            <span class="labels" id="zoomlabel" >Intervalo Y: ±100%</span> <br>
+            <input type="range" id="zoomrange" min="1" max="100" step="1" value="100">
+        </div>
+
+        <div id="reference" style="display:none">
+            <span class="labels" id="referencelabel">Referência: - </span> <br>
+            <input class="inputboxes" type="number" id="reference-value" placeholder="ref" step="0.1" min="0" max="100">
+            <input class="custom-button" type="submit" id="send-reference" value="Enviar">
+        </div>
+
+        <div id="tempo-amostra" style="display:none">
+            <span class="labels" id="tslabel">Tempo de Amostragem: - (ms)</span> <br>
+            <input class="inputboxes" type="number" id="ts-value" placeholder="ts" step="0.1" min="0" max="1000">
+            <input class="custom-button" type="submit" id="send-ts" value="Enviar">
+        </div>
+
+        <button id="start-recording" class="custom-button" style="display:none">Iniciar Gravação</button>
+        <button id="stop-recording" class="custom-stop-button" style="display:none"> Parar Gravação </button>
+
+        <button id="calib" class="custom-button" style="display:none">Iniciar Calibração</button>
+
+        <button id="start" class="custom-button-start" style="display:none">Ligar</button>
+        <button id="stop" class="custom-stop-button" style="display:none">Desligar</button>
+
+    </div>
+
+    <div class="error-message" id="error-message"></div>
+    
+    <div class="center-div">
+        <canvas id="real-time-chart1" style="width: 100%;"></canvas>
+    </div>
+
+    <div class="center-div">
+        <canvas id="real-time-chart2" style="width: 100%;"></canvas>
+    </div>
+
+    <script type="module">
+        //Declaração de constanstes e variáveis:
+        const kpin = document.getElementById('kpin');
+        const kiin = document.getElementById('kiin');
+        const kdin = document.getElementById('kdin');
+        const botatt = document.getElementById('botatt');
+        const constantes = document.getElementById('constantes');
+        const zoom = document.getElementById('zoom');
+        const zoomrange = document.getElementById('zoomrange');
+        const zoomlabel = document.getElementById('zoomlabel');
+        const calibButton = document.getElementById('calib');
+        const startRecordingButton = document.getElementById('start-recording');
+        const stopRecordingButton = document.getElementById('stop-recording');
+        const startButton = document.getElementById('start');
+        const stopButton = document.getElementById('stop');
+        const tempoamostra = document.getElementById('tempo-amostra');
+        const tslabel = document.getElementById('tslabel');
+        const tsInput = document.getElementById('ts-value');
+        const sendtsButton = document.getElementById('send-ts');
+        const reference = document.getElementById('reference');
+        const referencelabel = document.getElementById('referencelabel');
+        const referenceInput = document.getElementById('reference-value');
+        const sendReferenceButton = document.getElementById('send-reference');
+        const looptype = document.getElementById('loop-type');
+        const ctx1 = document.getElementById('real-time-chart1').getContext('2d');
+        const ctx2 = document.getElementById('real-time-chart2').getContext('2d');
+        let isSavingData = false;
+        const ts = 1; //tempo de amostragem, em ms
+        let refval = 0;
+        let pop = 0;
+        let loop_type = 0;
+        let current_time = 0;
+        let on_off = false;
+        let k = 0;
+        let theta = 0;
+        let tau = 0;
+        let kp = 0;
+        let ki = 0;
+        let kd = 0;
+
+        var recordingData = {
+            labels: [],
+            data: [[], [], []],
+        };
+
+        var chartData = {
+            labels: [],
+            data: [[], [], []],
+        };
+
+        const chart1 = new Chart(ctx1, {
+            type: 'line',
+            data: {
+                labels: chartData.labels,
+                datasets: [{
+                    label: '%y(t)',
+                    data: chartData.data[0],
+                    borderColor: 'rgba(255, 0, 0, 1)',
+                    borderWidth: 2,
+                    fill: false,
+                    pointRadius: 0,
+                },
+                {
+                    label: 'ref',
+                    data: chartData.data[1],
+                    borderColor: 'rgba(0, 255, 0, 1)',
+                    borderWidth: 2,
+                    fill: false,
+                    pointRadius: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                animation: false,
+                maintainAspectRatio: false,
+                color: '#fff',
+                layout: {
+                    padding: {
+                        left: 300,
+                    },
+                },
+                plugins: {
+                    title: {
+                        color: '#fff',
+                        display: true,
+				        text: "Resposta do Sistema"
+			        },
+                    legend: {
+                        display: true,
+                    },
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        min: 0,
+                        max: 5,
+                        title: {
+                            display: true,
+                            text: 'Tempo [s]',
+                            color: '#fff',
+                        },
+                        ticks: {
+                            stepSize: 1,
+                            color: '#fff',
+                        },
+                        grid: {
+                            color: '#3c3254',
+                        },
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 4095,
+                        min:0,
+                        title: {
+                            display: true,
+                            text: 'ADC (12 Bits)',
+                            color: '#fff',
+                        },
+                        ticks: {
+                            color: '#fff',
+                        },
+                        grid: {
+                            color: '#3c3254',
+                        },
+                    },
+                },
+            },
+        });
+
+        const chart2 = new Chart(ctx2, {
+            type: 'line',
+            data: {
+                labels: chartData.labels,
+                datasets: [{
+                    label: '%u(t)',
+                    data: chartData.data[2],
+                    borderColor: 'rgba(0, 0, 255, 1)',
+                    borderWidth: 2,
+                    fill: false,
+                    pointRadius: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                animation: false,
+                maintainAspectRatio: false,
+                color: '#fff',
+                layout: {
+                    padding: {
+                        left: 300,
+                    },
+                },
+                plugins: {
+                    title: {
+                        display: true,
+				        text: "Sinal de Controle",
+                        color: '#fff',
+			        },
+                    legend: {
+                        display: true,
+                    },
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        min: 0,
+                        max: 5,
+                        title: {
+                            display: true,
+                            text: 'Tempo [s]',
+                            color: '#fff',
+                        },
+                        ticks: {
+                            stepSize: 1,
+                            color: '#fff',
+                        },
+                        grid: {
+                            color: '#3c3254',
+                        },
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        min: 0,
+                        title: {
+                            display: true,
+                            text: 'Duty Cycle [%]',
+                            color: '#fff',
+                        },
+                        ticks: {
+                            color: '#fff',
+                        },
+                        grid: {
+                            color: '#3c3254',
+                        },
+                    },
+                },
+            },
+        });
+
+        const options = {
+            clientId: 'monitor',
+            //host: 'localhost',
+            host: '192.168.137.1',
+            port: 1883,
+            protocol: 'mqtt'
+        };
+        const topics = ['plot', 'feedback', 'info'];
+        const client = new Paho.MQTT.Client(options.host,Number(options.port),options.clientId);
+        
+        client.onConnectionLost = onConnectionLost;
+        client.onMessageArrived = onMessageArrived;
+        client.connect({
+            onSuccess: onConnect
+        });
+
+        //Configuração de zoom:
+        zoomrange.addEventListener('input', () => {
+            zoomlabel.textContent = "Intervalo Y: ±" + zoomrange.value.toString() + "%";
+            setZoom(refval);
+        });
+
+        //Função para ajuste de zoom:
+        function setZoom(focus) {
+            if((parseFloat(focus)-parseInt(zoomrange.value))>0) {
+                chart1.options.scales.y.min = (parseFloat(focus)-parseInt(zoomrange.value));
+            }else {
+                chart1.options.scales.y.min = 0;
+            }
+            if((parseFloat(focus)+parseInt(zoomrange.value))<100) {
+                chart1.options.scales.y.max = (parseFloat(focus)+parseInt(zoomrange.value));
+            }else {
+                chart1.options.scales.y.max = 100;
+            }
+            chart1.update();
+        };
+
+        //Configuração de tipo de malha:
+        looptype.addEventListener('change', () => {
+            switch(looptype.value) {
+                case 'A':
+                    loop_type = 2;
+                break;
+                case 'B':
+                    loop_type = 3;
+                break;
+                case 'C':
+                    loop_type = 3;
+                break;
+            }
+            if(looptype.value != 'X')
+            {
+                startButton.style.display = 'block';
+                if(looptype.value == 'C')
+                {
+                    constantes.style.display = "block";
+                }else
+                {
+                    constantes.style.display = "none";
+                }
+            }else
+            {
+                startButton.style.display = 'none';
+            }
+        });
+
+        //Envio das constantes com o ENTER:
+        constantes.addEventListener("keydown", function(event) {
+            if (event.key == "Enter") {
+                botatt.click();
+            }
+        });
+
+        //Envio da referência com o ENTER:
+        reference.addEventListener("keydown", function(event) {
+            if (event.key == "Enter") {
+                sendReferenceButton.click();
+            }
+        });
+
+        //Envio da do tempo de amostragem com o ENTER:
+        tempoamostra.addEventListener("keydown", function(event) {
+            if (event.key == "Enter") {
+                sendtsButton.click();
+            }
+        });
+
+        //Atualiza as constantes:
+        botatt.addEventListener('click', () => {
+            attConst();
+        });
+
+        function attConst() {
+            if(kpin.value) {
+                kp = kpin.value;
+                kpin.value = null;
+            }
+            if(kiin.value) {
+                ki = kiin.value;
+                kiin.value = null;
+            }
+            if(kdin.value) {
+                kd = kdin.value;
+                kdin.value = null;
+            }            
+            sendMqtt("controller", kp.toString()+","+ki.toString()+","+kd.toString());
+            constlabel.innerHTML = "Constantes atuais: | Kp = " + kp.toString() +" | ki = " + ki.toString() + " | kd = " + kd.toString() + " |";
+        };
+
+        //Configuração para envio do tempo de amostragem:
+        sendtsButton.addEventListener('click', () => {
+            sendTs();
+        });
+
+        //Função para envio do tempo de amostragem:
+        function sendTs() {
+            //sendMqtt("reference", referenceInput.value.toString());
+            tslabel.innerHTML = "Tempo de Amostragem: " + tsInput.value.toString() + " ms";
+            //ts = tsInput.value;
+            tsInput.value = null;
+        };
+
+        //Configuração para envio da referência:
+        sendReferenceButton.addEventListener('click', () => {
+            sendRef();
+        });
+
+        //Função para envio de referência:
+        function sendRef() {
+            sendMqtt("reference", referenceInput.value.toString());
+            referencelabel.innerHTML = "Referência: " + referenceInput.value.toString();
+            refval = referenceInput.value;
+            referenceInput.value = null;
+            setZoom(refval);
+        };
+        
+        //Botão de calibração:
+        calibButton.addEventListener('click', () => {
+
+            calibButton.style.display = 'none';
+            tempoamostra.style.display = 'none';
+            on_off = true;
+
+            sendMqtt("mode", "1");
+            showStatus('Calibrando o sensor...');
+        });
+
+        //Botão de start:
+        startButton.addEventListener('click', () => {
+
+            if(looptype.value != 'X')
+            {
+                startButton.style.display = 'none';
+                looptype.style.display = 'none';
+                stopButton.style.display = 'block';
+                startRecordingButton.style.display = 'block';
+                on_off = true;
+
+                if(looptype.value == 'C')
+                {
+                    constlabel.innerHTML = "Constantes atuais: | Kp = " + kp.toString() +" | ki = " + ki.toString() + " | kd = " + kd.toString() + " |";
+                    constantes.style.display = "block";
+                }
+
+                sendMqtt("mode", loop_type.toString());
+            }            
+        });
+
+        //Botão de stop:
+        stopButton.addEventListener('click', () => {
+            stopButton.style.display = "none";
+            //startButton.style.display = 'block';
+            looptype.style.display = "block";
+            if(looptype.value != 'C')
+            {
+                constantes.style.display = "none";
+            }            
+            reference.style.display = "none";
+            startRecordingButton.style.display = "none";
+            zoom.style.display = "none";
+            on_off = false;
+            if(isSavingData)
+            {
+                stopRecording();
+                stopRecordingButton.style.display = "none";
+            }
+            if(looptype.value != 'X')
+            {
+                startButton.style.display = 'block';
+            }  
+            sendMqtt("reference", "0");
+            sendMqtt("mode", "0");
+            clearData();
+        });
+
+        //Botão start recording:
+        startRecordingButton.addEventListener('click', () => {
+            startRecording();
+            startRecordingButton.style.display = 'none';
+            stopRecordingButton.style.display = 'block';
+        });
+
+        //Botão start recording:
+        stopRecordingButton.addEventListener('click', () => {
+            stopRecording();
+            startRecordingButton.style.display = "block";
+            stopRecordingButton.style.display = "none";
+        });
+
+        //Função para iniciar a gravação:
+        function startRecording() {
+            if(on_off){
+                showStatus('Gravação iniciada!');
+                isSavingData = true;
+            }            
+        }
+
+        //Função para encerrar a gravação:
+        function stopRecording() {
+            isSavingData = false;
+
+            if(recordingData.labels.length > 0){
+                saveDataToTXT();
+            }else
+            {
+                showStatus('Não há dados a serem gravados!');
+            }
+        }
+
+        //Função para salvar os dados em TXT:
+        function saveDataToTXT() {
+            var txtContent = "tempo\ty\tref\tu\n";
+            for (let i = 0; i < recordingData.labels.length; i++) {
+                var line = recordingData.labels[i].toString() + "\t" + recordingData.data[0][i].toString() + "\t" + recordingData.data[1][i].toString() + "\t" + recordingData.data[2][i].toString() + "\n";
+                txtContent += line;
+            }
+
+            const blob = new Blob([txtContent], { type: 'text/txt' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'dados.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            recordingData = {
+                labels: [],
+                data: [[], [], []],
+            };
+        }
+
+        function clearData() {
+            chartData = {
+                labels: [],
+                data: [[], [], []],
+            };
+            chart1.data.labels = chartData.labels;
+            chart2.data.labels = chartData.labels;
+            chart1.data.datasets[0].data = chartData.data[0];
+            chart1.data.datasets[1].data = chartData.data[1];
+            chart2.data.datasets[0].data = chartData.data[2];
+            chart1.options.scales.x.min = 0;
+            chart1.options.scales.x.max = 1;
+            chart2.options.scales.x.min = 0;
+            chart2.options.scales.x.max = 1;
+            chart1.update();
+            chart2.update();
+            zoomrange.value = 100;
+            zoomlabel.textContent = "Intervalo Y: ±" + zoomrange.value.toString() + "%";
+            setZoom(pop);
+            current_time = 0;
+        }
+
+        //Função de conexão perdida do MQTT:
+        function onConnectionLost(responseObject){
+            client.connect({
+                onSuccess: onConnect
+            });
+            console.log(responseObject)
+        }
+        //Função de mensagem recebida do MQTT:
+        function onMessageArrived(message){
+            console.log("OnMessageArrived: "+ message.payloadString);
+            updateChart(message.payloadString);            
+        }
+        //Função 'ao conectar' do MQTT:
+        function onConnect(){
+            console.log("Conectado ao servidor MQTT");
+            
+            for (let i = 0; i < topics.length; i++) {
+                client.subscribe(topics[i]);
+            }
+            showStatus('Aguardando conexão com a planta...');
+        }
+        //Função para enviar mensagem no tópico do MQTT:
+        function sendMqtt(topic, message) {
+            client.send(topic, message);
+        }
+
+        //Função que gerencia as trocas de funções de acordo com os códigos recebidos pela planta:
+        function state_change(code) {
+            switch(code) {
+                case '0':
+                    calibButton.style.display = "block";
+                    tempoamostra.style.display = "block";
+                    tsInput.focus();
+                    tsInput.click();
+                break;
+                case '1':
+                    isSavingData = true;
+                    showStatus('Extraindo curva de atuação...');
+                    chart1.options.scales.y.max = 100;
+                    chart1.options.scales.y.title.text = 'Saída Normalizada [%]';
+                    chart1.update();
+                break;
+                case '2':
+                    reference.style.display = "block";
+                    alert("Insira o ponto de operação desejado!");           
+                break;
+                case '3':
+                    pop = refval;
+                    reference.style.display = 'none';
+                    referenceInput.focus();
+                    referenceInput.click();
+                    showStatus('Analisando a resposta ao degrau...');
+                break;
+                case '4':
+                    stopRecording();
+                    clearData();
+                break;
+                case '5':
+                    //showStatus('Modelos obtidos!');
+                    //modelo.innerHTML = "$$G(s) = \\frac{" + k.toString() + "}{" + tau.toString() + "s + 1} ~~~~ k_p = " + kp.toString() + "~~~~ k_i = " + ki.toString() + " ~~~~ k_d = " + kd.toString() + "$$";
+                    //modelo.style.display = "block";
+                    showStatus('Escolha o modo de operação!');
+                    looptype.style.display = "block";
+                break;
+                case '6':
+                    showStatus('Levando sistema ao ponto de operação...');
+                break;
+                case '7':
+                    setZoom(pop);
+                    zoom.style.display = "block";
+                    reference.style.display = "block";
+                    referencelabel.innerHTML = "Referência: " + pop.toString();
+                    refval = pop;
+                    referenceInput.focus();
+                    referenceInput.click();
+                break;
+            }
+        }
+
+        function updateChart(message) {
+            if(message[0] == 'F')
+            {
+                state_change(message[1]);
+            }else
+            {
+                if(message[0] == 'P')
+                {
+                    const param = message.replace("P", "");
+                    console.log(param);
+                    const consts = param.split(",");
+                    console.log(consts);
+                    // k = parseFloat(consts[0]);
+                    // theta = parseFloat(consts[1]);
+                    // tau = parseFloat(consts[2]);
+                    // kp = parseFloat(consts[3]);
+                    // ki = parseFloat(consts[4]);
+                    // kd = parseFloat(consts[5]);
+                }else
+                {
+                    if(on_off)
+                    {
+                        const sigs = message.split("*");
+                        const v1 = sigs[0].split(",");
+                        const v2 = sigs[1].split(",");
+                        const v3 = sigs[2].split(",");  
+                            
+                        for(let i=0; i<v1.length; i++) {
+                            if(isSavingData){
+                                recordingData.data[0].push(v1[i]);
+                                recordingData.data[1].push(v2[i]);
+                                recordingData.data[2].push(v3[i]);
+                                recordingData.labels.push(current_time.toFixed(3));                 
+                            }
+                            if(!i)
+                            {
+                                chartData.data[0].push(v1[0]);
+                                chartData.data[1].push(v2[0]);
+                                chartData.data[2].push(v3[0]);
+                                chartData.labels.push(current_time.toFixed(3));
+                                if(chartData.labels.length > (5*ts*1e3/10))
+                                {
+                                    chartData.data[0].shift();
+                                    chartData.data[1].shift();
+                                    chartData.data[2].shift();
+                                    chartData.labels.shift();
+                                }
+                                chart1.options.scales.x.min = parseFloat(parseFloat(chartData.labels[0]).toFixed(1));
+                                chart1.options.scales.x.max = parseFloat(parseFloat(chartData.labels[chartData.labels.length-1]).toFixed(1));
+                                chart2.options.scales.x.min = parseFloat(parseFloat(chartData.labels[0]).toFixed(1));
+                                chart2.options.scales.x.max = parseFloat(parseFloat(chartData.labels[chartData.labels.length-1]).toFixed(1));
+                                chart1.update();
+                                chart2.update();
+                            }                        
+                            current_time += (1*ts*1e-3);
+                        }
+                    }
+                }
+            }
+        }
+
+        function showStatus(message) {
+            const errorMessage = document.getElementById('error-message');
+            errorMessage.textContent = message;
+
+            // Esconder a mensagem após 5 segundos (5000 milissegundos)
+            setTimeout(() => {
+                errorMessage.textContent = "";
+            }, 5000); // Tempo em milissegundos
+        }
+    </script>
+</body>
+</html>
